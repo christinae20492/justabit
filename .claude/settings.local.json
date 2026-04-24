@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(domain:api.github.com)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(rm \"c:/Users/princ/Portfolio/Mobile/justabit/src/navigation/MainNav.tsx\" \"c:/Users/princ/Portfolio/Mobile/justabit/src/screens/HomeScreen.tsx\")",
+      "Bash(rmdir \"c:/Users/princ/Portfolio/Mobile/justabit/src/navigation\" \"c:/Users/princ/Portfolio/Mobile/justabit/src/screens\" \"c:/Users/princ/Portfolio/Mobile/justabit/src/components\" \"c:/Users/princ/Portfolio/Mobile/justabit/src/types\" \"c:/Users/princ/Portfolio/Mobile/justabit/src\")",
+      "Bash(rm \"c:/Users/princ/Portfolio/Mobile/justabit/app/\\(tabs\\)/explore.tsx\" \"c:/Users/princ/Portfolio/Mobile/justabit/app/modal.tsx\")",
+      "Bash(npx tsc *)",
+      "Bash(echo \"EXIT=$?\")",
+      "Bash(npx expo *)"
+    ]
+  }
+}

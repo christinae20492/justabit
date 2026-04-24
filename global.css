@@ -1,0 +1,100 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer components {
+  .main-container {
+    @apply w-full h-fit mx-auto bg-white border border-gray-500 shadow-md
+      dark:bg-grey-500 dark:border-white;
+  }
+
+  .header {
+    @apply my-5 text-center;
+  }
+
+  .comparison-table {
+    @apply w-full h-32 border-2 rounded-2xl border-grey-200;
+  }
+
+  .table-item-grey {
+    @apply bg-grey-200;
+  }
+
+  .positive-item {
+    @apply bg-green text-green-dark;
+  }
+
+  .neg-item {
+    @apply bg-red text-red-dark;
+  }
+
+  .difference {
+    @apply bg-yellow-gold text-darkyellow-olive;
+  }
+
+  .exp-inc-item {
+    @apply border border-grey-100 rounded-xl mx-auto p-4 shadow-md text-lg
+      dark:shadow-black;
+  }
+
+  .exp-inc-btn {
+    @apply text-red mx-auto text-center m-4 dark:text-red-light;
+  }
+
+  .envelope-container-title {
+    @apply text-center w-full bg-green-sea p-4 rounded border-gray-500 border-2;
+  }
+
+  .envelope {
+    @apply max-w-60 min-h-24 max-h-36 my-3 bg-pink-blush mx-auto
+      border-grey-600 border-2 rounded-md shadow-md;
+  }
+
+  .envelope-title-text {
+    @apply font-semibold text-xl;
+  }
+
+  .envelope-body-text {
+    @apply text-grey-600 my-auto;
+  }
+
+  .modal-bg {
+    @apply absolute inset-0 items-center justify-center bg-black/50;
+  }
+
+  .modal-main {
+    @apply w-4/5 h-fit p-6 bg-white rounded-lg shadow-md
+      dark:bg-gray-800;
+  }
+
+  .summary-envelope {
+    @apply w-3/4 max-h-44 bg-slate-200 p-4 m-4 rounded
+      dark:bg-grey-600;
+  }
+
+  .button {
+    @apply px-4 py-2 bg-red-soft rounded-lg dark:bg-red-dark;
+  }
+
+  .export-btn {
+    @apply p-4 bg-blue-dark rounded-lg text-white shadow;
+  }
+
+  .text-input {
+    @apply mt-1 w-full border border-gray-300 rounded-md shadow-sm p-2
+      dark:bg-slate-900 dark:text-white;
+  }
+
+  .acc-tabs {
+    @apply px-9 py-4 w-full text-center text-xl;
+  }
+
+  .help-tabs {
+    @apply w-full p-4 border-b border-slate-900 bg-grey-100 text-center;
+  }
+
+  .pref-div {
+    @apply mb-6 p-4 border border-gray-200 dark:border-gray-700
+      rounded-lg shadow-sm bg-white dark:bg-gray-800;
+  }
+}

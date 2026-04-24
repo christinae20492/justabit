@@ -1,98 +1,131 @@
-import { Image } from 'expo-image';
-import { Platform, StyleSheet } from 'react-native';
+import { useEffect, useState } from 'react';
+import { Text, View } from 'react-native';
 
-import { HelloWave } from '@/components/hello-wave';
-import ParallaxScrollView from '@/components/parallax-scroll-view';
-import { ThemedText } from '@/components/themed-text';
-import { ThemedView } from '@/components/themed-view';
-import { Link } from 'expo-router';
+import { Layout } from '@/components/ui/layout';
 
-export default function HomeScreen() {
-  return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
-        <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
-        />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12',
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <Link href="/modal">
-          <Link.Trigger>
-            <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-          </Link.Trigger>
-          <Link.Preview />
-          <Link.Menu>
-            <Link.MenuAction title="Action" icon="cube" onPress={() => alert('Action pressed')} />
-            <Link.MenuAction
-              title="Share"
-              icon="square.and.arrow.up"
-              onPress={() => alert('Share pressed')}
-            />
-            <Link.Menu title="More" icon="ellipsis">
-              <Link.MenuAction
-                title="Delete"
-                icon="trash"
-                destructive
-                onPress={() => alert('Delete pressed')}
-              />
-            </Link.Menu>
-          </Link.Menu>
-        </Link>
+type Expense = { id: string; amount: number; envelope: string; location: string };
+type Income = { id: string; amount: number };
 
-        <ThemedText>
-          {`Tap the Explore tab to learn more about what's included in this starter app.`}
-        </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          {`When you're ready, run `}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
-  );
+type Summary = {
+  incomeTotals: number;
+  expenseTotals: number;
+  difference: number;
+};
+
+type SpendingDetails = {
+  highestEnvelope: string;
+  highestAmount: number;
+  frequentLocation: string;
+};
+
+// TODO: wire to real API. Stubbed for now so frontend can be built in isolation.
+const MOCK_INCOMES: Income[] = [
+  { id: 'i1', amount: 3200 },
+  { id: 'i2', amount: 400 },
+];
+const MOCK_EXPENSES: Expense[] = [
+  { id: 'e1', amount: 640, envelope: 'Groceries', location: 'Trader Joe\'s' },
+  { id: 'e2', amount: 210, envelope: 'Transport', location: 'Shell' },
+  { id: 'e3', amount: 180, envelope: 'Groceries', location: 'Trader Joe\'s' },
+];
+
+function computeSummary(incomes: Income[], expenses: Expense[]): Summary & SpendingDetails {
+  const incomeTotals = incomes.reduce((sum, i) => sum + i.amount, 0);
+  const expenseTotals = expenses.reduce((sum, e) => sum + e.amount, 0);
+
+  const byEnvelope = new Map<string, number>();
+  const byLocation = new Map<string, number>();
+  for (const e of expenses) {
+    byEnvelope.set(e.envelope, (byEnvelope.get(e.envelope) ?? 0) + e.amount);
+    byLocation.set(e.location, (byLocation.get(e.location) ?? 0) + 1);
+  }
+  const [highestEnvelope, highestAmount] = [...byEnvelope.entries()].sort((a, b) => b[1] - a[1])[0] ?? ['n/a', 0];
+  const [frequentLocation] = [...byLocation.entries()].sort((a, b) => b[1] - a[1])[0] ?? ['n/a'];
+
+  return {
+    incomeTotals,
+    expenseTotals,
+    difference: incomeTotals - expenseTotals,
+    highestEnvelope,
+    highestAmount,
+    frequentLocation,
+  };
 }
 
-const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  stepContainer: {
-    gap: 8,
-    marginBottom: 8,
-  },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
-  },
-});
+export default function HomeScreen() {
+  const [summary, setSummary] = useState<Summary>({
+    incomeTotals: 0,
+    expenseTotals: 0,
+    difference: 0,
+  });
+  const [spendingDetails, setSpendingDetails] = useState<SpendingDetails>({
+    highestEnvelope: '',
+    highestAmount: 0,
+    frequentLocation: '',
+  });
+
+  useEffect(() => {
+    const details = computeSummary(MOCK_INCOMES, MOCK_EXPENSES);
+    setSummary({
+      incomeTotals: details.incomeTotals,
+      expenseTotals: details.expenseTotals,
+      difference: details.difference,
+    });
+    setSpendingDetails({
+      highestEnvelope: details.highestEnvelope,
+      highestAmount: details.highestAmount,
+      frequentLocation: details.frequentLocation,
+    });
+  }, []);
+
+  const message = (() => {
+    if (summary.difference > 0) {
+      return `🎉 Wow, you saved a lot of money this month! You still have $${summary.difference.toFixed(2)} left over after paying the month's debts.`;
+    }
+    if (summary.difference < 0) {
+      return `😞 This month wasn't too good budget-wise. It looks like ${spendingDetails.frequentLocation} really got to you—you spent a total of $${spendingDetails.highestAmount.toFixed(2)} there this month.`;
+    }
+    if (!spendingDetails.frequentLocation && summary.difference === 0) {
+      return `Why are you looking here? There's nothing to report. Get to budgeting already!`;
+    }
+    return '';
+  })();
+
+  return (
+    <Layout>
+      <Text className="header text-3xl font-bold text-grey-400 dark:text-white">
+        Your &quot;At a Glance&quot;
+      </Text>
+
+      <View className="comparison-table overflow-hidden mx-auto">
+        <View className="flex-row">
+          <Text className="positive-item flex-1 text-center py-2 font-semibold">Income</Text>
+          <Text className="neg-item flex-1 text-center py-2 font-semibold">Expenditure</Text>
+          <Text className="difference flex-1 text-center py-2 font-semibold">Difference</Text>
+        </View>
+        <View className="flex-row">
+          <Text className="flex-1 text-center py-2 text-grey-400 dark:text-white">
+            ${summary.incomeTotals.toFixed(2)}
+          </Text>
+          <Text className="flex-1 text-center py-2 text-grey-400 dark:text-white">
+            ${summary.expenseTotals.toFixed(2)}
+          </Text>
+          <Text className="flex-1 text-center py-2 text-grey-400 dark:text-white">
+            ${summary.difference.toFixed(2)}
+          </Text>
+        </View>
+      </View>
+
+      {message ? (
+        <View className="m-6">
+          <Text className="text-base text-grey-400 dark:text-white">{message}</Text>
+        </View>
+      ) : null}
+
+      {/* TODO: port SummaryDoughnutChart. Needs a RN chart lib (react-native-gifted-charts / react-native-svg-charts). */}
+      <View className="mt-6 h-48 items-center justify-center border border-dashed border-grey-200 rounded-lg mx-4">
+        <Text className="text-grey-300">[donut chart placeholder]</Text>
+      </View>
+    </Layout>
+  );
+}
