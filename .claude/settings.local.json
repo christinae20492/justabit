@@ -8,7 +8,9 @@
       "Bash(rm \"c:/Users/princ/Portfolio/Mobile/justabit/app/\\(tabs\\)/explore.tsx\" \"c:/Users/princ/Portfolio/Mobile/justabit/app/modal.tsx\")",
       "Bash(npx tsc *)",
       "Bash(echo \"EXIT=$?\")",
-      "Bash(npx expo *)"
+      "Bash(npx expo *)",
+      "Bash(curl -s https://raw.githubusercontent.com/christinae20492/budget-tracker-v2/refs/heads/master/src/styles/globals.css)",
+      "Bash(curl -s https://raw.githubusercontent.com/christinae20492/budget-tracker-v2/refs/heads/master/src/pages/user/acc.tsx)"
     ]
   }
 }

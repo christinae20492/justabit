@@ -44,3 +44,5 @@ app-example
 
 # Claude Code session task log
 task-log.txt
+
+.env.local

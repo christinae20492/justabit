@@ -1,6 +1,7 @@
 import { MaterialIcons } from '@expo/vector-icons';
-import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
+import { useCallback, useMemo, useState } from 'react';
+import { ActivityIndicator, Alert, Pressable, ScrollView, Text, View } from 'react-native';
 
 import { AddEnvelopeModal } from '@/components/ui/add-envelope-modal';
 import { DailySpendingModal } from '@/components/ui/daily-spending-modal';
@@ -8,6 +9,10 @@ import { EnvelopePieChart } from '@/components/ui/envelope-pie-chart';
 import { FocusedEnvModal } from '@/components/ui/focused-env-modal';
 import { Layout } from '@/components/ui/layout';
 import { Envelope, Expense } from '@/types';
+import { createEnvelope } from '@/utils/db/envelopes';
+import { getEnvelopes } from '@/utils/db/envelopes';
+import { getExpenses } from '@/utils/db/expenses';
+import { showToast } from '@/utils/toast';
 import {
   dailySpendingLastSevenDays,
   getMonthName,
@@ -15,35 +20,11 @@ import {
   totalSpentOnDate,
 } from '@/utils/expenses';
 
-// TODO: swap for Supabase reads + realtime subscription when backend lands.
-const today = new Date();
-const iso = (d: Date) => d.toISOString().slice(0, 10);
-const daysAgo = (n: number) => {
-  const d = new Date(today);
-  d.setDate(d.getDate() - n);
-  return iso(d);
-};
-
-const MOCK_EXPENSES: Expense[] = [
-  { id: 'e1', location: "Trader Joe's", envelopeId: 'env-groceries', userId: 'u1', date: daysAgo(0), amount: 64, comments: null, dateCreated: new Date(), dateUpdated: new Date() },
-  { id: 'e2', location: 'Whole Foods', envelopeId: 'env-groceries', userId: 'u1', date: daysAgo(3), amount: 112, comments: 'weekly shop', dateCreated: new Date(), dateUpdated: new Date() },
-  { id: 'e3', location: 'Shell', envelopeId: 'env-transport', userId: 'u1', date: daysAgo(5), amount: 42, comments: null, dateCreated: new Date(), dateUpdated: new Date() },
-  { id: 'e4', location: 'Uber', envelopeId: 'env-transport', userId: 'u1', date: daysAgo(8), amount: 18, comments: null, dateCreated: new Date(), dateUpdated: new Date() },
-  { id: 'e5', location: 'Cinema', envelopeId: 'env-fun', userId: 'u1', date: daysAgo(4), amount: 28, comments: null, dateCreated: new Date(), dateUpdated: new Date() },
-  { id: 'e6', location: 'Restaurant', envelopeId: 'env-fun', userId: 'u1', date: daysAgo(2), amount: 55, comments: null, dateCreated: new Date(), dateUpdated: new Date() },
-  { id: 'e7', location: 'Verizon', envelopeId: 'env-bills', userId: 'u1', date: daysAgo(10), amount: 95, comments: null, dateCreated: new Date(), dateUpdated: new Date() },
-  { id: 'e8', location: 'Electric Co', envelopeId: 'env-bills', userId: 'u1', date: daysAgo(15), amount: 80, comments: null, dateCreated: new Date(), dateUpdated: new Date() },
-];
-
-const MOCK_ENVELOPES: Envelope[] = [
-  { id: 'env-groceries', title: 'Groceries', fixed: false, budget: 600, icon: 'cart', userId: 'u1', color: '#86bd75', comments: null, dateCreated: new Date(), dateUpdated: new Date(), expenses: MOCK_EXPENSES.filter((e) => e.envelopeId === 'env-groceries') },
-  { id: 'env-transport', title: 'Transport', fixed: true, budget: 300, icon: 'car', userId: 'u1', color: '#52808D', comments: null, dateCreated: new Date(), dateUpdated: new Date(), expenses: MOCK_EXPENSES.filter((e) => e.envelopeId === 'env-transport') },
-  { id: 'env-fun', title: 'Fun', fixed: false, budget: 200, icon: 'movie', userId: 'u1', color: '#E3AAB3', comments: null, dateCreated: new Date(), dateUpdated: new Date(), expenses: MOCK_EXPENSES.filter((e) => e.envelopeId === 'env-fun') },
-  { id: 'env-bills', title: 'Bills', fixed: true, budget: 400, icon: 'receipt', userId: 'u1', color: '#3A27B7', comments: null, dateCreated: new Date(), dateUpdated: new Date(), expenses: MOCK_EXPENSES.filter((e) => e.envelopeId === 'env-bills') },
-];
-
 export default function EnvelopesScreen() {
-  const [envelopes, setEnvelopes] = useState<Envelope[]>(MOCK_ENVELOPES);
+  const today = new Date();
+  const [envelopes, setEnvelopes] = useState<Envelope[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [loading, setLoading] = useState(true);
   const [currentMonth, setCurrentMonth] = useState(today.getMonth());
   const [currentYear, setCurrentYear] = useState(today.getFullYear());
 
@@ -52,28 +33,42 @@ export default function EnvelopesScreen() {
   const [isAddVisible, setAddVisible] = useState(false);
   const [isDailyVisible, setDailyVisible] = useState(false);
 
-  const fixedEnvelopes = useMemo(() => envelopes.filter((env) => env.fixed), [envelopes]);
-  const variableEnvelopes = useMemo(() => envelopes.filter((env) => !env.fixed), [envelopes]);
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      setLoading(true);
+      Promise.all([getEnvelopes(), getExpenses()])
+        .then(([envs, exps]) => {
+          if (!active) return;
+          setExpenses(exps);
+          setEnvelopes(envs);
+        })
+        .catch((e) => Alert.alert('Error loading data', e.message))
+        .finally(() => { if (active) setLoading(false); });
+      return () => { active = false; };
+    }, [])
+  );
 
-  const todaysSpending = useMemo(() => totalSpentOnDate(MOCK_EXPENSES), []);
-  const sevenDayBreakdown = useMemo(() => dailySpendingLastSevenDays(MOCK_EXPENSES), []);
+  const envelopesWithExpenses = useMemo<Envelope[]>(
+    () => envelopes.map((env) => ({ ...env, expenses: expenses.filter((e) => e.envelopeId === env.id) })),
+    [envelopes, expenses]
+  );
+
+  const fixedEnvelopes = useMemo(() => envelopesWithExpenses.filter((env) => env.fixed), [envelopesWithExpenses]);
+  const variableEnvelopes = useMemo(() => envelopesWithExpenses.filter((env) => !env.fixed), [envelopesWithExpenses]);
+
+  const todaysSpending = useMemo(() => totalSpentOnDate(expenses), [expenses]);
+  const sevenDayBreakdown = useMemo(() => dailySpendingLastSevenDays(expenses), [expenses]);
 
   const incrementMonth = () => {
     setCurrentMonth((prev) => {
-      if (prev === 11) {
-        setCurrentYear((y) => y + 1);
-        return 0;
-      }
+      if (prev === 11) { setCurrentYear((y) => y + 1); return 0; }
       return prev + 1;
     });
   };
-
   const decrementMonth = () => {
     setCurrentMonth((prev) => {
-      if (prev === 0) {
-        setCurrentYear((y) => y - 1);
-        return 11;
-      }
+      if (prev === 0) { setCurrentYear((y) => y - 1); return 11; }
       return prev - 1;
     });
   };
@@ -132,49 +127,44 @@ export default function EnvelopesScreen() {
         </Pressable>
       </View>
 
-      <View className="flex-row items-center justify-center my-4">
-        <Pressable onPress={() => setDailyVisible(true)} className="mr-2">
-          <MaterialIcons name="list-alt" size={22} color="#52808D" />
-        </Pressable>
-        <Text className="text-grey-400 dark:text-white">
-          Total Daily Spending: ${todaysSpending.toFixed(2)}
-        </Text>
-      </View>
+      {loading ? (
+        <ActivityIndicator className="mt-8" />
+      ) : (
+        <>
+          <View className="flex-row items-center justify-center my-4">
+            <Pressable onPress={() => setDailyVisible(true)} className="mr-2">
+              <MaterialIcons name="list-alt" size={22} color="#52808D" />
+            </Pressable>
+            <Text className="text-grey-400 dark:text-white">
+              Total Daily Spending: ${todaysSpending.toFixed(2)}
+            </Text>
+          </View>
 
-      <ScrollView className="w-11/12 border border-grey-100 self-center mt-2 p-3 rounded-lg">
-        <EnvelopePieChart envelopes={envelopes} />
-
-        {renderSection(fixedEnvelopes, 'Fixed')}
-        {renderSection(variableEnvelopes, 'Variable')}
-
-        <Pressable
-          onPress={() => setAddVisible(true)}
-          className="button self-center my-4 items-center">
-          <Text className="text-grey-400 font-semibold">Add Envelope</Text>
-        </Pressable>
-      </ScrollView>
+          <ScrollView className="w-11/12 border border-grey-100 self-center mt-2 p-3 rounded-lg">
+            <EnvelopePieChart envelopes={envelopesWithExpenses} />
+            {renderSection(fixedEnvelopes, 'Fixed')}
+            {renderSection(variableEnvelopes, 'Variable')}
+            <Pressable
+              onPress={() => setAddVisible(true)}
+              className="button self-center my-4 items-center">
+              <Text className="text-grey-400 font-semibold">Add Envelope</Text>
+            </Pressable>
+          </ScrollView>
+        </>
+      )}
 
       <AddEnvelopeModal
         isOpen={isAddVisible}
         onClose={() => setAddVisible(false)}
-        onCreate={(newEnv) => {
-          // TODO: replace this optimistic local push with POST /api/envelopes.
-          setEnvelopes((prev) => [
-            ...prev,
-            {
-              id: `env-${Date.now()}`,
-              title: newEnv.title,
-              fixed: newEnv.fixed,
-              budget: newEnv.budget,
-              icon: newEnv.icon,
-              userId: 'u1',
-              color: newEnv.color,
-              comments: newEnv.comments,
-              dateCreated: new Date(),
-              dateUpdated: new Date(),
-              expenses: [],
-            },
-          ]);
+        onCreate={async (newEnv) => {
+          setAddVisible(false);
+          try {
+            const created = await createEnvelope(newEnv);
+            setEnvelopes((prev) => [...prev, created]);
+            showToast.success('Envelope created');
+          } catch (e: any) {
+            Alert.alert('Failed to create envelope', e.message);
+          }
         }}
       />
       <FocusedEnvModal

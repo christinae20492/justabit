@@ -1,92 +1,61 @@
-import { useEffect, useState } from 'react';
-import { Text, View } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
+import { useCallback, useMemo, useState } from 'react';
+import { ActivityIndicator, Alert, Text, View } from 'react-native';
 
 import { Layout } from '@/components/ui/layout';
-
-type Expense = { id: string; amount: number; envelope: string; location: string };
-type Income = { id: string; amount: number };
-
-type Summary = {
-  incomeTotals: number;
-  expenseTotals: number;
-  difference: number;
-};
-
-type SpendingDetails = {
-  highestEnvelope: string;
-  highestAmount: number;
-  frequentLocation: string;
-};
-
-// TODO: wire to real API. Stubbed for now so frontend can be built in isolation.
-const MOCK_INCOMES: Income[] = [
-  { id: 'i1', amount: 3200 },
-  { id: 'i2', amount: 400 },
-];
-const MOCK_EXPENSES: Expense[] = [
-  { id: 'e1', amount: 640, envelope: 'Groceries', location: 'Trader Joe\'s' },
-  { id: 'e2', amount: 210, envelope: 'Transport', location: 'Shell' },
-  { id: 'e3', amount: 180, envelope: 'Groceries', location: 'Trader Joe\'s' },
-];
-
-function computeSummary(incomes: Income[], expenses: Expense[]): Summary & SpendingDetails {
-  const incomeTotals = incomes.reduce((sum, i) => sum + i.amount, 0);
-  const expenseTotals = expenses.reduce((sum, e) => sum + e.amount, 0);
-
-  const byEnvelope = new Map<string, number>();
-  const byLocation = new Map<string, number>();
-  for (const e of expenses) {
-    byEnvelope.set(e.envelope, (byEnvelope.get(e.envelope) ?? 0) + e.amount);
-    byLocation.set(e.location, (byLocation.get(e.location) ?? 0) + 1);
-  }
-  const [highestEnvelope, highestAmount] = [...byEnvelope.entries()].sort((a, b) => b[1] - a[1])[0] ?? ['n/a', 0];
-  const [frequentLocation] = [...byLocation.entries()].sort((a, b) => b[1] - a[1])[0] ?? ['n/a'];
-
-  return {
-    incomeTotals,
-    expenseTotals,
-    difference: incomeTotals - expenseTotals,
-    highestEnvelope,
-    highestAmount,
-    frequentLocation,
-  };
-}
+import { SummaryDonutChart } from '@/components/ui/summary-donut-chart';
+import { Envelope, Expense, Income } from '@/types';
+import { getEnvelopes } from '@/utils/db/envelopes';
+import { getExpenses } from '@/utils/db/expenses';
+import { getIncomes } from '@/utils/db/incomes';
+import { getMonthlyExpenditureDetails } from '@/utils/expenses';
 
 export default function HomeScreen() {
-  const [summary, setSummary] = useState<Summary>({
-    incomeTotals: 0,
-    expenseTotals: 0,
-    difference: 0,
-  });
-  const [spendingDetails, setSpendingDetails] = useState<SpendingDetails>({
-    highestEnvelope: '',
-    highestAmount: 0,
-    frequentLocation: '',
-  });
+  const [envelopes, setEnvelopes] = useState<Envelope[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [incomes, setIncomes] = useState<Income[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const details = computeSummary(MOCK_INCOMES, MOCK_EXPENSES);
-    setSummary({
-      incomeTotals: details.incomeTotals,
-      expenseTotals: details.expenseTotals,
-      difference: details.difference,
-    });
-    setSpendingDetails({
-      highestEnvelope: details.highestEnvelope,
-      highestAmount: details.highestAmount,
-      frequentLocation: details.frequentLocation,
-    });
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      let active = true;
+      setLoading(true);
+      Promise.all([getEnvelopes(), getExpenses(), getIncomes()])
+        .then(([envs, exp, inc]) => {
+          if (!active) return;
+          setEnvelopes(envs);
+          setExpenses(exp);
+          setIncomes(inc);
+        })
+        .catch((e) => Alert.alert('Error loading data', e.message))
+        .finally(() => { if (active) setLoading(false); });
+      return () => { active = false; };
+    }, [])
+  );
+
+  const summary = getMonthlyExpenditureDetails(incomes, expenses);
+
+  const envelopeTitle = useMemo(
+    () => envelopes.find((e) => e.id === summary.highestEnvelope)?.title ?? null,
+    [envelopes, summary.highestEnvelope]
+  );
 
   const message = (() => {
-    if (summary.difference > 0) {
-      return `🎉 Wow, you saved a lot of money this month! You still have $${summary.difference.toFixed(2)} left over after paying the month's debts.`;
+    const hasData = summary.incomeTotals > 0 || summary.expenseTotals > 0;
+    if (!hasData) {
+      return "Why are you looking here? There's nothing to report. Get to budgeting already!";
     }
-    if (summary.difference < 0) {
-      return `😞 This month wasn't too good budget-wise. It looks like ${spendingDetails.frequentLocation} really got to you—you spent a total of $${spendingDetails.highestAmount.toFixed(2)} there this month.`;
+    if (summary.spendingDifference > 0) {
+      return `Wow, you saved a lot of money this month! You still have $${summary.spendingDifference.toFixed(2)} left over after paying the month's debts.`;
     }
-    if (!spendingDetails.frequentLocation && summary.difference === 0) {
-      return `Why are you looking here? There's nothing to report. Get to budgeting already!`;
+    if (summary.spendingDifference < 0) {
+      const locationPart = summary.highestSpendingLocation !== 'N/A'
+        ? `It looks like ${summary.highestSpendingLocation} really got to you — you spent $${summary.highestSpendingAmount.toFixed(2)} there.`
+        : '';
+      const envelopePart = envelopeTitle
+        ? ` Your biggest spending category was ${envelopeTitle}.`
+        : '';
+      return `This month wasn't too good budget-wise. ${locationPart}${envelopePart}`.trim();
     }
     return '';
   })();
@@ -97,35 +66,43 @@ export default function HomeScreen() {
         Your &quot;At a Glance&quot;
       </Text>
 
-      <View className="comparison-table overflow-hidden mx-auto">
-        <View className="flex-row">
-          <Text className="positive-item flex-1 text-center py-2 font-semibold">Income</Text>
-          <Text className="neg-item flex-1 text-center py-2 font-semibold">Expenditure</Text>
-          <Text className="difference flex-1 text-center py-2 font-semibold">Difference</Text>
-        </View>
-        <View className="flex-row">
-          <Text className="flex-1 text-center py-2 text-grey-400 dark:text-white">
-            ${summary.incomeTotals.toFixed(2)}
-          </Text>
-          <Text className="flex-1 text-center py-2 text-grey-400 dark:text-white">
-            ${summary.expenseTotals.toFixed(2)}
-          </Text>
-          <Text className="flex-1 text-center py-2 text-grey-400 dark:text-white">
-            ${summary.difference.toFixed(2)}
-          </Text>
-        </View>
-      </View>
+      {loading ? (
+        <ActivityIndicator className="mt-8" />
+      ) : (
+        <>
+          <View className="comparison-table overflow-hidden mx-auto">
+            <View className="flex-row">
+              <Text className="positive-item flex-1 text-center py-2 font-semibold">Income</Text>
+              <Text className="neg-item flex-1 text-center py-2 font-semibold">Expenditure</Text>
+              <Text className="difference flex-1 text-center py-2 font-semibold">Difference</Text>
+            </View>
+            <View className="flex-row">
+              <Text className="flex-1 text-center py-2 text-grey-400 dark:text-white">
+                ${summary.incomeTotals.toFixed(2)}
+              </Text>
+              <Text className="flex-1 text-center py-2 text-grey-400 dark:text-white">
+                ${summary.expenseTotals.toFixed(2)}
+              </Text>
+              <Text className="flex-1 text-center py-2 text-grey-400 dark:text-white">
+                ${summary.spendingDifference.toFixed(2)}
+              </Text>
+            </View>
+          </View>
 
-      {message ? (
-        <View className="m-6">
-          <Text className="text-base text-grey-400 dark:text-white">{message}</Text>
-        </View>
-      ) : null}
+          {message ? (
+            <View className="m-6">
+              <Text className="text-base text-grey-400 dark:text-white">{message}</Text>
+            </View>
+          ) : null}
 
-      {/* TODO: port SummaryDoughnutChart. Needs a RN chart lib (react-native-gifted-charts / react-native-svg-charts). */}
-      <View className="mt-6 h-48 items-center justify-center border border-dashed border-grey-200 rounded-lg mx-4">
-        <Text className="text-grey-300">[donut chart placeholder]</Text>
-      </View>
+          <View className="mt-4 mx-4 p-4 bg-white dark:bg-gray-800 rounded-lg border border-grey-100 dark:border-grey-600">
+            <Text className="text-base font-semibold text-grey-400 dark:text-white mb-3 text-center">
+              This Month's Budget Overview
+            </Text>
+            <SummaryDonutChart summary={summary} />
+          </View>
+        </>
+      )}
     </Layout>
   );
 }
